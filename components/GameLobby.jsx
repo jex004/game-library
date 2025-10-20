@@ -2,8 +2,8 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { signInAnonymously, onAuthStateChanged } from 'firebase/auth';
-// --- MODIFICATION: Imported all necessary Firestore functions ---
-import { collection, addDoc, query, onSnapshot, serverTimestamp, doc, setDoc, deleteDoc, getDocs } from 'firebase/firestore';
+// --- MODIFICATION: Imported updateDoc for updating room activity ---
+import { collection, addDoc, query, onSnapshot, serverTimestamp, doc, setDoc, deleteDoc, getDocs, updateDoc } from 'firebase/firestore';
 import { db, auth, appId } from '../lib/firebase';
 
 // --- Helper component for the send icon (Unchanged) ---
@@ -38,29 +38,38 @@ function ChatRoom({ roomId, user, nickname, onLeaveRoom }) {
         }
     }, [messages]);
 
+    // --- MODIFICATION: handleSendMessage now also updates the room's lastActivity ---
     const handleSendMessage = async (e) => {
         e.preventDefault();
         if (newMessage.trim() === '' || !appId) return;
         
-        const messagesPath = `artifacts/${appId}/public/data/rooms/${roomId}/messages`;
+        const roomsPath = `artifacts/${appId}/public/data/rooms`;
+        const messagesPath = `${roomsPath}/${roomId}/messages`;
+
+        // 1. Add the new message document
         await addDoc(collection(db, messagesPath), {
             text: newMessage,
             senderId: user.uid,
             senderName: nickname,
             timestamp: serverTimestamp(),
         });
+
+        // 2. Update the parent room's lastActivity timestamp
+        const roomRef = doc(db, roomsPath, roomId);
+        await updateDoc(roomRef, {
+            lastActivity: serverTimestamp()
+        });
+        
         setNewMessage('');
     };
 
     return (
-        // --- MODIFICATION: This flex structure is key for the scrolling fix ---
         <div className="w-full h-full flex flex-col">
             <header className="bg-gray-800 text-white p-4 rounded-t-lg flex justify-between items-center">
                 <h1 className="text-xl font-bold">Room: {roomId}</h1>
                 <button onClick={async () => await onLeaveRoom()} className="bg-red-500 text-white font-bold py-1 px-3 rounded hover:bg-red-600 transition">Leave</button>
             </header>
             
-            {/* --- MODIFICATION: Added min-h-0 to fix flexbox overflow --- */}
             <main ref={chatBoxRef} className="flex-1 min-h-0 p-4 overflow-y-auto bg-gray-50">
                 {messages.map(msg => (
                     <div key={msg.id} className={`flex mb-4 ${msg.senderId === user.uid ? 'justify-end' : 'justify-start'}`}>
@@ -98,6 +107,7 @@ function Lobby({ onJoinRoom }) {
         return () => unsubscribe();
     }, []);
 
+    // --- MODIFICATION: handleCreateRoom now adds the lastActivity field ---
     const handleCreateRoom = async (e) => {
         e.preventDefault();
         const trimmedName = newRoomName.trim();
@@ -108,9 +118,9 @@ function Lobby({ onJoinRoom }) {
         await setDoc(roomRef, {
             name: trimmedName,
             createdAt: serverTimestamp(),
+            lastActivity: serverTimestamp(), 
         });
         setNewRoomName('');
-        // --- MODIFICATION: Await the async onJoinRoom function ---
         await onJoinRoom(trimmedName);
     };
 
@@ -131,7 +141,6 @@ function Lobby({ onJoinRoom }) {
                 ) : (
                     <ul className="space-y-2">
                         {rooms.map(room => (
-                            // --- MODIFICATION: onClick handler is now async ---
                             <li key={room.id} onClick={async () => await onJoinRoom(room.id)} className="p-3 bg-gray-100 rounded-lg hover:bg-blue-100 cursor-pointer transition text-lg font-medium text-gray-700">
                                 {room.name}
                             </li>
@@ -147,7 +156,7 @@ function Lobby({ onJoinRoom }) {
 export default function GameLobby() {
     const [user, setUser] = useState(null);
     const [nickname, setNickname] = useState('');
-    const [currentView, setCurrentView] = useState('NICKNAME'); // NICKNAME, LOBBY, CHAT
+    const [currentView, setCurrentView] = useState('NICKNAME');
     const [roomId, setRoomId] = useState(null);
 
     useEffect(() => {
@@ -161,12 +170,10 @@ export default function GameLobby() {
         return () => unsubscribe();
     }, []);
 
-    // --- MODIFICATION: Added useEffect to handle leaving room on browser close/refresh ---
     useEffect(() => {
-        if (!roomId || !user) return; // Only run when in a room
+        if (!roomId || !user) return;
 
         const handleBeforeUnload = async (event) => {
-            // This is a best-effort attempt, not guaranteed to run on all browsers
             await leaveRoom(true); 
         };
 
@@ -182,7 +189,6 @@ export default function GameLobby() {
         if (nickname.trim()) setCurrentView('LOBBY');
     };
 
-    // --- MODIFICATION: `joinRoom` now adds user to the members subcollection ---
     const joinRoom = async (id) => {
         if (!user || !appId) return;
         
