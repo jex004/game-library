@@ -201,7 +201,6 @@ export default function GameLobby() {
         }
     };
 
-    // --- MODIFICATION: `leaveRoom` now handles the room cleanup logic ---
     const leaveRoom = async (isUnloading = false) => {
         if (!user || !roomId || !appId) return;
 
@@ -247,7 +246,6 @@ export default function GameLobby() {
                 return <Lobby onJoinRoom={joinRoom} />;
             case 'CHAT':
                 return (
-                    // --- MODIFICATION: Container with fixed height for scrolling ---
                     <div className="w-full max-w-2xl h-[90vh] max-h-[700px] flex flex-col bg-white rounded-lg shadow-2xl">
                         <ChatRoom roomId={roomId} user={user} nickname={nickname} onLeaveRoom={leaveRoom} />
                     </div>
@@ -258,7 +256,6 @@ export default function GameLobby() {
     };
 
     return (
-        // --- MODIFICATION: h-screen is crucial for the height chain ---
         <div className="bg-gray-100 flex items-center justify-center h-screen font-sans">
             {user ? renderView() : <p>Connecting...</p>}
         </div>
