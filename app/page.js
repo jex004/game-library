@@ -1,16 +1,9 @@
-import dynamic from 'next/dynamic';
+// app/page.js (Updated)
 
-// Dynamically import the GameLobby component and disable Server-Side Rendering (SSR) for it.
-// This ensures it only runs in the browser, where it can safely interact with Firebase.
-const GameLobby = dynamic(
-  () => import('../components/GameLobby'),
-  { 
-    ssr: false, // This is the key change: it prevents the component from running on the server.
-    loading: () => <p className="flex items-center justify-center h-screen text-xl">Loading Lobby...</p>
-  }
-);
+import GameLobbyLoader from '../components/GameLobbyLoader';
 
 export default function HomePage() {
-  return <GameLobby />;
+  // This page remains a Server Component, but it renders a Client Component
+  // that handles the client-side-only logic.
+  return <GameLobbyLoader />;
 }
-
