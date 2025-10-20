@@ -1,5 +1,5 @@
-import Chat from '../components/Chat';
+import GameLobby from '../components/GameLobby';
 
 export default function HomePage() {
-  return <Chat />;
+  return <GameLobby />;
 }
