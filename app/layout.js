@@ -18,9 +18,12 @@ export const metadata = {
 
 export default function RootLayout({ children }) {
   return (
-    <html lang="en">
+    // STEP 1: Add h-full to the <html> tag. 
+    // It's also good practice to set the base background color here.
+    <html lang="en" className="h-full bg-gray-100">
+      {/* STEP 2: Add h-full to the <body> tag, right alongside your font classes */}
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+        className={`${geistSans.variable} ${geistMono.variable} antialiased h-full`}
       >
         {children}
       </body>
