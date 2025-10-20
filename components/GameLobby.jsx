@@ -198,7 +198,6 @@ export default function GameLobby() {
             case 'CHAT':
                 return (
                     <div className="w-full max-w-2xl h-full sm:h-auto sm:max-h-[90vh] flex flex-col bg-white rounded-lg shadow-2xl">
-                        {/* Pass the new async leaveRoom function */}
                         <ChatRoom roomId={roomId} user={user} nickname={nickname} onLeaveRoom={leaveRoom} />
                     </div>
                 );
