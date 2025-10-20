@@ -1,20 +1,9 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { initializeApp } from 'firebase/app';
-import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
-import { getFirestore, collection, addDoc, query, onSnapshot, serverTimestamp, doc, setDoc } from 'firebase/firestore';
-
-// --- IMPORTANT: Firebase Configuration ---
-// This configuration will be loaded from environment variables in your Next.js project.
-const firebaseConfig = {
-  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
-  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
-  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
-  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
-};
+import { signInAnonymously, onAuthStateChanged } from 'firebase/auth';
+import { collection, addDoc, query, onSnapshot, serverTimestamp, doc, setDoc } from 'firebase/firestore';
+import { db, auth, appId } from '../lib/firebase'; // <-- IMPORT FROM OUR NEW FILE
 
 // --- Helper component for the send icon ---
 const SendIcon = () => (
@@ -22,14 +11,13 @@ const SendIcon = () => (
 );
 
 // --- The Chat Room Component ---
-function ChatRoom({ roomId, user, db, nickname, onLeaveRoom }) {
+function ChatRoom({ roomId, user, nickname, onLeaveRoom }) {
     const [messages, setMessages] = useState([]);
     const [newMessage, setNewMessage] = useState('');
     const chatBoxRef = useRef(null);
-    const appId = firebaseConfig.appId;
 
     useEffect(() => {
-        if (!db || !roomId) return;
+        if (!db || !roomId || !appId) return;
         
         const messagesPath = `artifacts/${appId}/public/data/rooms/${roomId}/messages`;
         const q = query(collection(db, messagesPath));
@@ -41,7 +29,7 @@ function ChatRoom({ roomId, user, db, nickname, onLeaveRoom }) {
         });
         
         return () => unsubscribe();
-    }, [db, roomId, appId]);
+    }, [roomId]);
 
     useEffect(() => {
         if (chatBoxRef.current) {
@@ -51,7 +39,7 @@ function ChatRoom({ roomId, user, db, nickname, onLeaveRoom }) {
 
     const handleSendMessage = async (e) => {
         e.preventDefault();
-        if (newMessage.trim() === '') return;
+        if (newMessage.trim() === '' || !appId) return;
         
         const messagesPath = `artifacts/${appId}/public/data/rooms/${roomId}/messages`;
         await addDoc(collection(db, messagesPath), {
@@ -90,14 +78,12 @@ function ChatRoom({ roomId, user, db, nickname, onLeaveRoom }) {
 }
 
 // --- The Lobby Component ---
-function Lobby({ onJoinRoom, db }) {
+function Lobby({ onJoinRoom }) {
     const [rooms, setRooms] = useState([]);
     const [newRoomName, setNewRoomName] = useState('');
-    const appId = firebaseConfig.appId;
 
     useEffect(() => {
-        if (!db) return;
-
+        if (!appId) return;
         const roomsPath = `artifacts/${appId}/public/data/rooms`;
         const q = query(collection(db, roomsPath));
 
@@ -106,12 +92,12 @@ function Lobby({ onJoinRoom, db }) {
         });
 
         return () => unsubscribe();
-    }, [db, appId]);
+    }, []);
 
     const handleCreateRoom = async (e) => {
         e.preventDefault();
         const trimmedName = newRoomName.trim();
-        if (trimmedName === '' || !db) return;
+        if (trimmedName === '' || !appId) return;
 
         const roomsPath = `artifacts/${appId}/public/data/rooms`;
         const roomRef = doc(db, roomsPath, trimmedName);
@@ -155,23 +141,19 @@ function Lobby({ onJoinRoom, db }) {
 export default function GameLobby() {
     const [user, setUser] = useState(null);
     const [nickname, setNickname] = useState('');
-    const [db, setDb] = useState(null);
-    const [auth, setAuth] = useState(null);
     const [currentView, setCurrentView] = useState('NICKNAME'); // NICKNAME, LOBBY, CHAT
     const [roomId, setRoomId] = useState(null);
 
     useEffect(() => {
-        if (!firebaseConfig.apiKey) return;
-        const app = initializeApp(firebaseConfig);
-        setDb(getFirestore(app));
-        setAuth(getAuth(app));
-    }, []);
-
-    useEffect(() => {
-        if (!auth) return;
-        const unsubscribe = onAuthStateChanged(auth, u => u ? setUser(u) : signInAnonymously(auth));
+        const unsubscribe = onAuthStateChanged(auth, u => {
+            if (u) {
+                setUser(u);
+            } else {
+                signInAnonymously(auth).catch(error => console.error("Anonymous sign-in failed:", error));
+            }
+        });
         return () => unsubscribe();
-    }, [auth]);
+    }, []);
 
     const handleNicknameSubmit = (e) => {
         e.preventDefault();
@@ -202,11 +184,11 @@ export default function GameLobby() {
                     </div>
                 );
             case 'LOBBY':
-                return <Lobby onJoinRoom={joinRoom} db={db} />;
+                return <Lobby onJoinRoom={joinRoom} />;
             case 'CHAT':
                 return (
                     <div className="w-full max-w-2xl h-full sm:h-auto sm:max-h-[90vh] flex flex-col bg-white rounded-lg shadow-2xl">
-                        <ChatRoom roomId={roomId} user={user} db={db} nickname={nickname} onLeaveRoom={leaveRoom} />
+                        <ChatRoom roomId={roomId} user={user} nickname={nickname} onLeaveRoom={leaveRoom} />
                     </div>
                 );
             default:
