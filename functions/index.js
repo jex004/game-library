@@ -3,14 +3,10 @@ const { logger } = require("firebase-functions");
 const { initializeApp } = require("firebase-admin/app");
 const { getFirestore, Timestamp } = require("firebase-admin/firestore");
 
-// Initialize the Firebase Admin SDK
 initializeApp();
 
-// This is your Firebase App ID from your .env file
-// IMPORTANT: You must set this in your function's environment variables!
-const APP_ID = process.env.APP_ID; 
+const APP_ID = process.env.APP_ID;
 
-// This function will run every 5 minutes.
 exports.cleanupInactiveRooms = onSchedule("every 5 minutes", async (event) => {
   logger.log("Running inactive room cleanup job.");
 
@@ -23,12 +19,9 @@ exports.cleanupInactiveRooms = onSchedule("every 5 minutes", async (event) => {
   const roomsPath = `artifacts/${APP_ID}/public/data/rooms`;
   const roomsRef = db.collection(roomsPath);
 
-  // Calculate the timestamp for 15 minutes ago
   const fifteenMinutesAgo = Timestamp.fromMillis(Date.now() - 15 * 60 * 1000);
 
-  // Query for rooms where lastActivity is older than 15 minutes
   const inactiveRoomsQuery = roomsRef.where("lastActivity", "<=", fifteenMinutesAgo);
-
   const snapshot = await inactiveRoomsQuery.get();
 
   if (snapshot.empty) {
@@ -36,14 +29,19 @@ exports.cleanupInactiveRooms = onSchedule("every 5 minutes", async (event) => {
     return;
   }
 
-  // Use a batch to delete all inactive rooms at once
-  const batch = db.batch();
-  snapshot.forEach(doc => {
-    logger.log(`Marking room for deletion: ${doc.id}`);
-    batch.delete(doc.ref);
+  // --- MODIFICATION: Instead of a simple batch delete, we now loop through each room
+  // and perform a full recursive delete for each one.
+  const deletePromises = [];
+  snapshot.forEach((doc) => {
+    logger.log(`Starting recursive delete for room: ${doc.id}`);
+    // The firebase CLI has a built-in recursive delete function we can use here.
+    // This is the recommended way to delete a document and all its subcollections.
+    const promise = db.recursiveDelete(doc.ref);
+    deletePromises.push(promise);
   });
 
-  await batch.commit();
+  // Wait for all the delete operations to complete.
+  await Promise.all(deletePromises);
 
-  logger.log(`Successfully deleted ${snapshot.size} inactive rooms.`);
+  logger.log(`Successfully deleted ${snapshot.size} inactive rooms and their subcollections.`);
 });
